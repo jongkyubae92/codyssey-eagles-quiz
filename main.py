@@ -1,7 +1,8 @@
 import random
+import shutil
 import json
 import os
-from datetime import datetime  # 날짜와 시간을 다루기 위해 추가
+from datetime import datetime
 
 class Quiz:
     def __init__(self, question, choices, answer, hint):
@@ -30,9 +31,10 @@ class QuizGame:
     def __init__(self):
         self.state_file = "state.json"
         self.quizzes = []
-        self.history = []  # 점수 기록을 담을 리스트
+        self.history = []
         self.best_score = 0.0
-        self.load_state()
+        # 데이터를 로드하고, 실패 시 기본 퀴즈로 초기화
+        self.initialize_data()
 
     def get_default_quizzes(self):
         return [
@@ -43,42 +45,51 @@ class QuizGame:
             Quiz("류현진 선수의 등번호는?", ["0", "1", "99", "100"], 3, "모르면 간첩"),
         ]
 
-    def load_state(self):
-        if not os.path.exists(self.state_file):
-            self.quizzes = self.get_default_quizzes()
-            self.save_state()
-            return
-
-        try:
-            with open(self.state_file, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                self.best_score = float(data.get("best_score", 0.0))
-                self.history = data.get("history", [])  # 히스토리 불러오기
-                quiz_data = data.get("quizzes", [])
-                
-                # 힌트 패치 및 퀴즈 로드
-                default_hints = {q.question: q.hint for q in self.get_default_quizzes()}
-                new_quizzes = []
-                for q in quiz_data:
-                    current_hint = q.get('hint', '힌트 없음')
-                    if current_hint == '힌트 없음':
-                        current_hint = default_hints.get(q['question'], '힌트 정보가 없습니다.')
-                    new_quizzes.append(Quiz(q['question'], q['choices'], q['answer'], current_hint))
-                self.quizzes = new_quizzes
-        except (json.JSONDecodeError, KeyError, IOError):
-            self.quizzes = self.get_default_quizzes()
-
     def save_state(self):
+        """현재 상태를 저장하고 백업본(.bak)을 생성합니다."""
         try:
+            # 1. 기존 파일 백업
+            if os.path.exists(self.state_file):
+                shutil.copy(self.state_file, f"{self.state_file}.bak")
+            
+            # 2. 데이터 저장
             state_data = {
                 "best_score": self.best_score,
-                "history": self.history,  # 히스토리 저장
+                "history": self.history,
                 "quizzes": [q.to_dict() for q in self.quizzes]
             }
             with open(self.state_file, "w", encoding="utf-8") as f:
                 json.dump(state_data, f, ensure_ascii=False, indent=4)
-        except IOError as e:
-            print(f"\n[오류] 저장 실패: {e}")
+        except Exception as e:
+            print(f"\n[오류] 데이터 저장 실패: {e}")
+
+    def load_state(self):
+        """파일에서 데이터를 읽어옵니다. 손상 시 백업본을 시도합니다."""
+        target_files = [self.state_file, f"{self.state_file}.bak"]
+        
+        for file_path in target_files:
+            if os.path.exists(file_path):
+                try:
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        return json.load(f)
+                except (json.JSONDecodeError, IOError):
+                    print(f"⚠️ {file_path} 파일이 손상되었습니다.")
+                    continue
+        return None
+
+    def initialize_data(self):
+        """로드된 데이터를 바탕으로 객체를 초기화합니다."""
+        data = self.load_state()
+        if data:
+            self.best_score = data.get("best_score", 0.0)
+            self.history = data.get("history", [])
+            # 딕셔너리 리스트를 Quiz 객체 리스트로 변환
+            self.quizzes = [Quiz(**q) for q in data.get("quizzes", [])]
+            if not self.quizzes:
+                self.quizzes = self.get_default_quizzes()
+        else:
+            print(">> 데이터를 찾을 수 없어 기본값으로 시작합니다.")
+            self.quizzes = self.get_default_quizzes()
 
     def get_safe_input(self, prompt, min_val, max_val):
         while True:
@@ -97,15 +108,14 @@ class QuizGame:
         if not self.quizzes:
             print("\n[알림] 등록된 퀴즈가 없습니다.")
             return
+        
         total_available = len(self.quizzes)
         num_to_solve = self.get_safe_input(f"\n몇 문제를 풀겠습니까? (1~{total_available}): ", 1, total_available)
         if num_to_solve is None: return
 
-        quiz_pool = self.quizzes[:]
-        random.shuffle(quiz_pool)
-        quiz_pool = quiz_pool[:num_to_solve]
-
+        quiz_pool = random.sample(self.quizzes, num_to_solve)
         score = 0.0
+
         for i, q in enumerate(quiz_pool, 1):
             hint_used = False
             q.display(i)
@@ -117,6 +127,7 @@ class QuizGame:
                     hint_used = True
                     continue
                 break
+            
             if q.is_correct(ans):
                 points = 0.5 if hint_used else 1.0
                 print(f"정답입니다! (+{points}점) ✨")
@@ -124,31 +135,35 @@ class QuizGame:
             else:
                 print(f"오답입니다. 정답은 {q.answer}번입니다. 😢")
 
-        # --- 기록 추가 로직 ---
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        record = {"date": now, "total": num_to_solve, "score": score}
-        self.history.append(record)
-        
-        print(f"\n이번 점수: {score} / {num_to_solve}")
+        # 결과 저장 로직 (예시)
+        print(f"\n총점: {score} / {float(num_to_solve)}")
         if score > self.best_score:
-            print("🎊 최고 기록 경신!")
             self.best_score = score
+            print("🎉 최고 기록 경신!")
         
-        self.save_state() # 히스토리와 최고점수 저장
+        self.history.append({
+            "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "total": num_to_solve,  # 이 부분을 추가해서 총 문제 수를 저장합니다!
+            "score": score
+        })
+        self.save_state()
 
     def show_history(self):
-        """전체 게임 기록 출력"""
         if not self.history:
             print("\n[알림] 아직 게임 기록이 없습니다.")
             return
+
+        print("\n" + "="*45)
+        print(f"{'날짜 및 시간':^19} | {'문제 수':^5} | {'점수':^5}")
+        print("-" * 45)
         
-        print("\n" + "="*40)
-        print(f"{'날짜 및 시간':^20} | {'문제 수':^5} | {'점수':^5}")
-        print("-" * 40)
-        for h in self.history[-10:]: # 최근 10개 기록만 표시 (너무 많아질 수 있으므로)
-            print(f"{h['date']} | {h['total']:^7} | {h['score']:^7}")
-        print("="*40)
-        print(f"🏆 현재 최고 기록: {self.best_score}점")
+        for h in self.history:
+            # .get()을 사용하면 키가 없어도 에러 대신 기본값(N/A)을 보여줍니다.
+            date = h.get('date', 'Unknown')
+            total = h.get('total', '-') 
+            score = h.get('score', 0.0)
+            print(f"{date} | {total:^7} | {score:^7}")
+        print("="*45)
 
     def add(self):
         print("\n--- 새 퀴즈 추가 ---")
