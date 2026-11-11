@@ -131,22 +131,38 @@ def add_quiz(quizzes):
     save_data(quizzes)
     print("\n[성공] 새로운 퀴즈가 등록되었습니다! ✨")
 
+def list_quizzes(quizzes):
+    """저장된 모든 퀴즈 목록을 번호와 함께 출력합니다."""
+    # 퀴즈가 없는 경우 처리
+    if not quizzes:
+        print("\n[알림] 등록된 퀴즈가 없습니다. 먼저 퀴즈를 추가해 주세요.")
+        return
+
+    print(f"\n--- 등록된 퀴즈 목록 (총 {len(quizzes)}개) ---")
+    for i, q in enumerate(quizzes, 1):
+        # 문제와 정답 번호를 간결하게 표시
+        print(f"{i}. {q.question} (정답: {q.answer}번)")
+    print("-" * 35)
+
 def main():
     quizzes = load_data()
     
     while True:
         print("\n--- 한화이글스 퀴즈 프로그램 ---")
         print("1. 퀴즈 풀기")
-        print("2. 퀴즈 추가") # 추가된 메뉴
-        print("3. 종료")
+        print("2. 퀴즈 추가")
+        print("3. 퀴즈 목록") # 새 메뉴 추가
+        print("4. 종료")
         
         menu = input("메뉴 선택: ").strip()
         
         if menu == '1':
             play_quiz(quizzes)
         elif menu == '2':
-            add_quiz(quizzes) # 함수 호출
+            add_quiz(quizzes)
         elif menu == '3':
+            list_quizzes(quizzes) # 함수 호출
+        elif menu == '4':
             print("프로그램을 종료합니다. 보살 팬 여러분 화이팅! 🦅")
             break
         else:
