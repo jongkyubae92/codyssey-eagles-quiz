@@ -97,24 +97,30 @@ class QuizGame:
             if val: return val
             print(">> 내용을 입력해 주세요.")
 
-    # --- 주요 기능 메서드 ---
     def play(self):
         if not self.quizzes:
             print("\n[알림] 등록된 퀴즈가 없습니다.")
             return
 
-        # [수정] 퀴즈 리스트의 복사본을 만들어 랜덤하게 섞습니다.
+        # 1. 문제 수 선택받기
+        total_available = len(self.quizzes)
+        print(f"\n현재 총 {total_available}개의 문제가 준비되어 있습니다.")
+        num_to_solve = self.get_safe_input(f"몇 문제를 풀겠습니까? (1~{total_available}): ", 1, total_available)
+        
+        if num_to_solve is None: return # 중도 종료(Ctrl+C 등) 처리
+
+        # 2. 퀴즈 섞기 및 선택한 수만큼 자르기
         quiz_pool = self.quizzes[:]
         random.shuffle(quiz_pool)
+        quiz_pool = quiz_pool[:num_to_solve] # 사용자가 선택한 개수만큼만 슬라이싱
 
         score = 0
-        print(f"\n--- 퀴즈 시작! (총 {len(quiz_pool)}문제) ---")
+        print(f"\n--- 퀴즈 시작! (총 {num_to_solve}문제) ---")
         
-        # [수정] 원본 대신 섞인 quiz_pool을 사용합니다.
         for i, q in enumerate(quiz_pool, 1):
             q.display(i)
             ans = self.get_safe_input("정답 번호 입력: ", 1, 4)
-            if ans is None: return # 중도 종료 처리
+            if ans is None: return
             
             if q.is_correct(ans):
                 print("정답입니다! ✨")
@@ -122,8 +128,12 @@ class QuizGame:
             else:
                 print(f"오답입니다. 정답은 {q.answer}번입니다. 😢")
 
+        # 3. 결과 출력 (선택한 문제 수 기준으로 점수 계산)
         print("\n" + "="*30)
-        print(f"이번 점수: {score} / {len(quiz_pool)}")
+        print(f"이번 점수: {score} / {num_to_solve}")
+        
+        # 최고 기록은 '개수'로 저장할지, '비율'로 저장할지 결정해야 합니다.
+        # 여기서는 단순히 맞춘 문제 수(score)로 비교하겠습니다.
         if score > self.best_score:
             print(f"🎊 최고 기록 경신! ({self.best_score} -> {score})")
             self.best_score = score
@@ -131,6 +141,7 @@ class QuizGame:
         else:
             print(f"현재 최고 기록: {self.best_score}점")
         print("="*30)
+
     def add(self):
         print("\n--- 새 퀴즈 추가 ---")
         question = self.get_non_empty_input("문제 내용: ")
