@@ -1,6 +1,7 @@
 import random
 import json
 import os
+from datetime import datetime  # 날짜와 시간을 다루기 위해 추가
 
 class Quiz:
     def __init__(self, question, choices, answer, hint):
@@ -29,6 +30,7 @@ class QuizGame:
     def __init__(self):
         self.state_file = "state.json"
         self.quizzes = []
+        self.history = []  # 점수 기록을 담을 리스트
         self.best_score = 0.0
         self.load_state()
 
@@ -51,21 +53,18 @@ class QuizGame:
             with open(self.state_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 self.best_score = float(data.get("best_score", 0.0))
+                self.history = data.get("history", [])  # 히스토리 불러오기
                 quiz_data = data.get("quizzes", [])
                 
-                if not quiz_data:
-                    self.quizzes = self.get_default_quizzes()
-                else:
-                    # 힌트 패치 로직 포함
-                    default_hints = {q.question: q.hint for q in self.get_default_quizzes()}
-                    new_quizzes = []
-                    for q in quiz_data:
-                        current_hint = q.get('hint', '힌트 없음')
-                        if current_hint == '힌트 없음':
-                            current_hint = default_hints.get(q['question'], '힌트 정보가 없습니다.')
-                        new_quizzes.append(Quiz(q['question'], q['choices'], q['answer'], current_hint))
-                    self.quizzes = new_quizzes
-                    self.save_state()
+                # 힌트 패치 및 퀴즈 로드
+                default_hints = {q.question: q.hint for q in self.get_default_quizzes()}
+                new_quizzes = []
+                for q in quiz_data:
+                    current_hint = q.get('hint', '힌트 없음')
+                    if current_hint == '힌트 없음':
+                        current_hint = default_hints.get(q['question'], '힌트 정보가 없습니다.')
+                    new_quizzes.append(Quiz(q['question'], q['choices'], q['answer'], current_hint))
+                self.quizzes = new_quizzes
         except (json.JSONDecodeError, KeyError, IOError):
             self.quizzes = self.get_default_quizzes()
 
@@ -73,6 +72,7 @@ class QuizGame:
         try:
             state_data = {
                 "best_score": self.best_score,
+                "history": self.history,  # 히스토리 저장
                 "quizzes": [q.to_dict() for q in self.quizzes]
             }
             with open(self.state_file, "w", encoding="utf-8") as f:
@@ -92,12 +92,6 @@ class QuizGame:
                 print(">> 숫자를 입력해 주세요.")
             except (EOFError, KeyboardInterrupt):
                 return None
-
-    def get_non_empty_input(self, prompt):
-        while True:
-            val = input(prompt).strip()
-            if val: return val
-            print(">> 내용을 입력해 주세요.")
 
     def play(self):
         if not self.quizzes:
@@ -130,17 +124,38 @@ class QuizGame:
             else:
                 print(f"오답입니다. 정답은 {q.answer}번입니다. 😢")
 
+        # --- 기록 추가 로직 ---
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        record = {"date": now, "total": num_to_solve, "score": score}
+        self.history.append(record)
+        
         print(f"\n이번 점수: {score} / {num_to_solve}")
         if score > self.best_score:
+            print("🎊 최고 기록 경신!")
             self.best_score = score
-            self.save_state()
+        
+        self.save_state() # 히스토리와 최고점수 저장
+
+    def show_history(self):
+        """전체 게임 기록 출력"""
+        if not self.history:
+            print("\n[알림] 아직 게임 기록이 없습니다.")
+            return
+        
+        print("\n" + "="*40)
+        print(f"{'날짜 및 시간':^20} | {'문제 수':^5} | {'점수':^5}")
+        print("-" * 40)
+        for h in self.history[-10:]: # 최근 10개 기록만 표시 (너무 많아질 수 있으므로)
+            print(f"{h['date']} | {h['total']:^7} | {h['score']:^7}")
+        print("="*40)
+        print(f"🏆 현재 최고 기록: {self.best_score}점")
 
     def add(self):
         print("\n--- 새 퀴즈 추가 ---")
-        question = self.get_non_empty_input("문제 내용: ")
-        choices = [self.get_non_empty_input(f"선택지 {i}: ") for i in range(1, 5)]
+        question = input("문제 내용: ").strip()
+        choices = [input(f"선택지 {i}: ").strip() for i in range(1, 5)]
         answer = self.get_safe_input("정답 번호 (1-4): ", 1, 4)
-        hint = self.get_non_empty_input("힌트 내용: ")
+        hint = input("힌트 내용: ").strip()
         if answer:
             self.quizzes.append(Quiz(question, choices, answer, hint))
             self.save_state()
@@ -155,29 +170,22 @@ class QuizGame:
             print(f"{i}. {q.question}")
 
     def delete(self):
-        """퀴즈 삭제 메서드"""
-        if not self.quizzes:
-            print("\n[알림] 삭제할 퀴즈가 없습니다.")
-            return
+        if not self.quizzes: return
         self.list_all()
         target_idx = self.get_safe_input(f"\n삭제할 번호 (취소: 0): ", 0, len(self.quizzes))
         if target_idx == 0 or target_idx is None: return
-        
         removed = self.quizzes.pop(target_idx - 1)
         self.save_state()
         print(f"\n[삭제 완료] '{removed.question}'")
 
-    def show_score(self):
-        print(f"\n🏆 최고 기록: {self.best_score}점")
-
 if __name__ == "__main__":
     game = QuizGame()
     while True:
-        print("\n1.풀기 2.추가 3.목록 4.삭제 5.기록 6.종료")
+        print("\n1.풀기 2.추가 3.목록 4.삭제 5.기록보기 6.종료")
         choice = game.get_safe_input("선택: ", 1, 6)
         if choice == 1: game.play()
         elif choice == 2: game.add()
         elif choice == 3: game.list_all()
         elif choice == 4: game.delete()
-        elif choice == 5: game.show_score()
+        elif choice == 5: game.show_history()
         elif choice == 6 or choice is None: break
