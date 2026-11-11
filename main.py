@@ -33,7 +33,6 @@ class QuizGame:
         self.load_state()
 
     def get_default_quizzes(self):
-        """기본 퀴즈 데이터 (파일이 없을 때 사용)"""
         return [
             Quiz("한화이글스가 KBO 리그에 처음 참가한 연도는?", ["1985년", "1987년", "1984년", "1986년"], 4, "빙그레 이글스의 시작"),
             Quiz("한화이글스가 한국시리즈에서 처음 우승한 해는?", ["1998년", "1996년", "2001년", "1999년"], 4, "세기말"),
@@ -57,26 +56,17 @@ class QuizGame:
                 if not quiz_data:
                     self.quizzes = self.get_default_quizzes()
                 else:
-                    # 1. 기본 퀴즈의 힌트들을 딕셔너리 형태로 미리 준비합니다.
+                    # 힌트 패치 로직 포함
                     default_hints = {q.question: q.hint for q in self.get_default_quizzes()}
-                    
                     new_quizzes = []
                     for q in quiz_data:
-                        # 2. 파일에서 가져온 힌트가 없거나 '힌트 없음'일 경우
                         current_hint = q.get('hint', '힌트 없음')
                         if current_hint == '힌트 없음':
-                            # 기본 힌트 딕셔너리에서 질문 내용을 찾아 힌트를 가져옵니다.
                             current_hint = default_hints.get(q['question'], '힌트 정보가 없습니다.')
-                        
                         new_quizzes.append(Quiz(q['question'], q['choices'], q['answer'], current_hint))
-                    
                     self.quizzes = new_quizzes
-                    
-                    # 3. 힌트가 채워진 데이터를 파일에 다시 저장하여 업데이트합니다.
                     self.save_state()
-
         except (json.JSONDecodeError, KeyError, IOError):
-            print("\n[알림] 데이터 파일이 손상되어 기본 데이터를 로드합니다.")
             self.quizzes = self.get_default_quizzes()
 
     def save_state(self):
@@ -113,7 +103,6 @@ class QuizGame:
         if not self.quizzes:
             print("\n[알림] 등록된 퀴즈가 없습니다.")
             return
-
         total_available = len(self.quizzes)
         num_to_solve = self.get_safe_input(f"\n몇 문제를 풀겠습니까? (1~{total_available}): ", 1, total_available)
         if num_to_solve is None: return
@@ -123,22 +112,17 @@ class QuizGame:
         quiz_pool = quiz_pool[:num_to_solve]
 
         score = 0.0
-        print(f"\n--- 퀴즈 시작! (힌트 사용 시 해당 문제 0.5점) ---")
-        
         for i, q in enumerate(quiz_pool, 1):
             hint_used = False
             q.display(i)
-            
             while True:
                 ans = self.get_safe_input("정답 번호 입력 (힌트보기: 0): ", 0, 4)
                 if ans is None: return
-                
                 if ans == 0:
                     print(f"💡 힌트: {q.hint}")
                     hint_used = True
-                    continue # 다시 정답 입력을 기다림
+                    continue
                 break
-
             if q.is_correct(ans):
                 points = 0.5 if hint_used else 1.0
                 print(f"정답입니다! (+{points}점) ✨")
@@ -146,30 +130,21 @@ class QuizGame:
             else:
                 print(f"오답입니다. 정답은 {q.answer}번입니다. 😢")
 
-        print("\n" + "="*30)
-        print(f"이번 점수: {score} / {num_to_solve}")
+        print(f"\n이번 점수: {score} / {num_to_solve}")
         if score > self.best_score:
-            print(f"🎊 최고 기록 경신! ({self.best_score} -> {score})")
             self.best_score = score
             self.save_state()
-        else:
-            print(f"현재 최고 기록: {self.best_score}점")
-        print("="*30)
 
     def add(self):
-        """끊겼던 퀴즈 추가 기능 완성"""
         print("\n--- 새 퀴즈 추가 ---")
         question = self.get_non_empty_input("문제 내용: ")
-        choices = []
-        for i in range(1, 5):
-            choices.append(self.get_non_empty_input(f"선택지 {i}: "))
+        choices = [self.get_non_empty_input(f"선택지 {i}: ") for i in range(1, 5)]
         answer = self.get_safe_input("정답 번호 (1-4): ", 1, 4)
         hint = self.get_non_empty_input("힌트 내용: ")
-        
         if answer:
             self.quizzes.append(Quiz(question, choices, answer, hint))
             self.save_state()
-            print("\n[성공] 새로운 퀴즈가 등록되었습니다!")
+            print("\n[성공] 퀴즈가 추가되었습니다!")
 
     def list_all(self):
         if not self.quizzes:
@@ -177,28 +152,32 @@ class QuizGame:
             return
         print(f"\n--- 등록된 퀴즈 목록 (총 {len(self.quizzes)}개) ---")
         for i, q in enumerate(self.quizzes, 1):
-            print(f"{i}. {q.question} (정답: {q.answer}번)")
+            print(f"{i}. {q.question}")
+
+    def delete(self):
+        """퀴즈 삭제 메서드"""
+        if not self.quizzes:
+            print("\n[알림] 삭제할 퀴즈가 없습니다.")
+            return
+        self.list_all()
+        target_idx = self.get_safe_input(f"\n삭제할 번호 (취소: 0): ", 0, len(self.quizzes))
+        if target_idx == 0 or target_idx is None: return
+        
+        removed = self.quizzes.pop(target_idx - 1)
+        self.save_state()
+        print(f"\n[삭제 완료] '{removed.question}'")
 
     def show_score(self):
-        print("\n" + "="*30)
-        print(f"🏆 현재 최고 기록: {self.best_score}점")
-        print("="*30)
+        print(f"\n🏆 최고 기록: {self.best_score}점")
 
 if __name__ == "__main__":
     game = QuizGame()
     while True:
-        print("\n[한화이글스 퀴즈 프로그램]")
-        print("1. 퀴즈 풀기")
-        print("2. 퀴즈 추가")
-        print("3. 퀴즈 목록")
-        print("4. 최고 기록")
-        print("5. 종료")
-        
-        choice = game.get_safe_input("메뉴 선택: ", 1, 5)
+        print("\n1.풀기 2.추가 3.목록 4.삭제 5.기록 6.종료")
+        choice = game.get_safe_input("선택: ", 1, 6)
         if choice == 1: game.play()
         elif choice == 2: game.add()
         elif choice == 3: game.list_all()
-        elif choice == 4: game.show_score()
-        elif choice == 5 or choice is None:
-            print("프로그램을 종료합니다. 최강한화! 🦅")
-            break
+        elif choice == 4: game.delete()
+        elif choice == 5: game.show_score()
+        elif choice == 6 or choice is None: break
