@@ -1,3 +1,4 @@
+import random
 import json
 import os
 
@@ -102,12 +103,18 @@ class QuizGame:
             print("\n[알림] 등록된 퀴즈가 없습니다.")
             return
 
+        # [수정] 퀴즈 리스트의 복사본을 만들어 랜덤하게 섞습니다.
+        quiz_pool = self.quizzes[:]
+        random.shuffle(quiz_pool)
+
         score = 0
-        print(f"\n--- 퀴즈 시작! (총 {len(self.quizzes)}문제) ---")
-        for i, q in enumerate(self.quizzes, 1):
+        print(f"\n--- 퀴즈 시작! (총 {len(quiz_pool)}문제) ---")
+        
+        # [수정] 원본 대신 섞인 quiz_pool을 사용합니다.
+        for i, q in enumerate(quiz_pool, 1):
             q.display(i)
             ans = self.get_safe_input("정답 번호 입력: ", 1, 4)
-            if ans is None: return
+            if ans is None: return # 중도 종료 처리
             
             if q.is_correct(ans):
                 print("정답입니다! ✨")
@@ -116,7 +123,7 @@ class QuizGame:
                 print(f"오답입니다. 정답은 {q.answer}번입니다. 😢")
 
         print("\n" + "="*30)
-        print(f"이번 점수: {score} / {len(self.quizzes)}")
+        print(f"이번 점수: {score} / {len(quiz_pool)}")
         if score > self.best_score:
             print(f"🎊 최고 기록 경신! ({self.best_score} -> {score})")
             self.best_score = score
@@ -124,7 +131,6 @@ class QuizGame:
         else:
             print(f"현재 최고 기록: {self.best_score}점")
         print("="*30)
-
     def add(self):
         print("\n--- 새 퀴즈 추가 ---")
         question = self.get_non_empty_input("문제 내용: ")
@@ -145,7 +151,13 @@ class QuizGame:
             print(f"{i}. {q.question} (정답: {q.answer}번)")
 
     def show_score(self):
-        print(f"\n🏆 현재까지의 최고 점수는 {self.best_score}점입니다.")
+        """최고 기록을 출력합니다."""
+        print("\n" + "="*30)
+        if self.best_score == 0:
+            print("아직 기록이 없습니다. 첫 게임에 도전하세요!")
+        else:
+            print(f"🏆 현재 최고 기록은 {self.best_score}점입니다.")
+        print("="*30)
 
     def run(self):
         menu_map = {
