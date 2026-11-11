@@ -90,19 +90,63 @@ def play_quiz(quizzes):
     print(f"정답률: {(score/total)*100:.1f}%")
     print("="*30)
 
+def save_data(quizzes):
+    """퀴즈 리스트를 JSON 파일로 저장합니다."""
+    file_path = "quizzes.json"
+    # 객체 리스트를 딕셔너리 리스트로 변환
+    data = [
+        {"question": q.question, "choices": q.choices, "answer": q.answer}
+        for q in quizzes
+    ]
+    with open(file_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
+
+def get_non_empty_input(prompt):
+    """비어 있지 않은 문자열을 입력받습니다."""
+    while True:
+        val = input(prompt).strip()
+        if val:
+            return val
+        print(">> [오류] 내용을 입력해 주세요.")
+
+def add_quiz(quizzes):
+    """새로운 퀴즈를 입력받아 리스트에 추가하고 저장합니다."""
+    print("\n--- 새 퀴즈 추가 ---")
+    
+    question = get_non_empty_input("문제 내용: ")
+    
+    choices = []
+    for i in range(1, 5):
+        choice = get_non_empty_input(f"선택지 {i}: ")
+        choices.append(choice)
+        
+    answer = get_safe_input("정답 번호 (1-4): ", 1, 4)
+    if answer is None:
+        print("\n[알림] 추가가 취소되었습니다.")
+        return
+
+    # 리스트에 추가 및 파일 저장
+    new_quiz = Quiz(question, choices, answer)
+    quizzes.append(new_quiz)
+    save_data(quizzes)
+    print("\n[성공] 새로운 퀴즈가 등록되었습니다! ✨")
+
 def main():
     quizzes = load_data()
     
     while True:
         print("\n--- 한화이글스 퀴즈 프로그램 ---")
         print("1. 퀴즈 풀기")
-        print("2. 종료")
+        print("2. 퀴즈 추가") # 추가된 메뉴
+        print("3. 종료")
         
         menu = input("메뉴 선택: ").strip()
         
         if menu == '1':
             play_quiz(quizzes)
         elif menu == '2':
+            add_quiz(quizzes) # 함수 호출
+        elif menu == '3':
             print("프로그램을 종료합니다. 보살 팬 여러분 화이팅! 🦅")
             break
         else:
