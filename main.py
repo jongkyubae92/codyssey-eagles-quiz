@@ -17,8 +17,28 @@ class Quiz:
         """정답 여부를 확인합니다."""
         return user_answer == self.answer
 
+# --- 점수 관련 함수 추가 ---
+def load_high_score():
+    """파일에서 최고 점수를 불러옵니다."""
+    file_path = "score.json"
+    if not os.path.exists(file_path):
+        return 0
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data.get("high_score", 0)
+    except (json.JSONDecodeError, KeyError):
+        return 0
+
+def save_high_score(score):
+    """최고 점수를 파일에 저장합니다."""
+    file_path = "score.json"
+    with open(file_path, "w", encoding="utf-8") as f:
+        json.dump({"high_score": score}, f)
+
+# --- 입력 및 데이터 관리 함수 ---
 def get_safe_input(prompt, min_val, max_val):
-    """안전한 입력 함수"""
+    """안전한 숫자 입력 함수"""
     while True:
         try:
             user_input = input(prompt).strip()
@@ -33,10 +53,10 @@ def get_safe_input(prompt, min_val, max_val):
         except ValueError:
             print(">> [오류] 숫자가 아닌 값이 입력되었습니다.")
         except (EOFError, KeyboardInterrupt):
-            return None # 중단 시 None 반환
+            return None
 
 def load_data():
-    """데이터 로드 함수"""
+    """퀴즈 데이터 로드"""
     default_quizzes = [
         Quiz("한화이글스가 KBO 리그에 처음 참가한 연도는 언제일까요?", ["1985년", "1987년", "1984년", "1986년"], 4),
         Quiz("한화이글스가 한국시리즈에서 처음 우승한 해는 언제일까요?", ["1998년", "1996년", "2001년", "1999년"], 4),
@@ -56,29 +76,35 @@ def load_data():
     except (json.JSONDecodeError, KeyError):
         return default_quizzes
 
+def save_data(quizzes):
+    """퀴즈 데이터를 JSON 파일로 저장"""
+    file_path = "quizzes.json"
+    data = [{"question": q.question, "choices": q.choices, "answer": q.answer} for q in quizzes]
+    with open(file_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
+
+def get_non_empty_input(prompt):
+    """비어 있지 않은 문자열 입력"""
+    while True:
+        val = input(prompt).strip()
+        if val: return val
+        print(">> [오류] 내용을 입력해 주세요.")
+
+# --- 메뉴 기능 함수 ---
 def play_quiz(quizzes):
-    """퀴즈 풀기 기능"""
     if not quizzes:
         print("\n[알림] 등록된 퀴즈가 없습니다.")
         return
 
     score = 0
     total = len(quizzes)
-
-    print(f"\n--- 퀴즈를 시작합니다! (총 {total}문제) ---")
+    print(f"\n--- 퀴즈 시작! (총 {total}문제) ---")
 
     for i, q in enumerate(quizzes, 1):
-        # 1. 클래스 내부의 display 메서드 활용
         q.display(i)
-
-        # 2. 기존에 만든 get_safe_input 함수 활용 (코드 간결화)
         choice = get_safe_input("정답 번호 입력: ", 1, 4)
+        if choice is None: return
         
-        if choice is None: # 사용자가 강제 종료했을 때
-            print("\n[알림] 퀴즈를 중단합니다.")
-            return
-
-        # 3. 클래스 내부의 is_correct 메서드 활용
         if q.is_correct(choice):
             print("정답입니다! ✨")
             score += 1
@@ -86,73 +112,52 @@ def play_quiz(quizzes):
             print(f"오답입니다. 정답은 {q.answer}번입니다. 😢")
 
     print("\n" + "="*30)
-    print(f"최종 점수: {score} / {total}")
-    print(f"정답률: {(score/total)*100:.1f}%")
+    print(f"이번 점수: {score} / {total}")
+    
+    high_score = load_high_score()
+    if score > high_score:
+        print(f"🎊 축하합니다! 최고 기록 경신! ({high_score} -> {score})")
+        save_high_score(score)
+    else:
+        print(f"현재 최고 기록: {high_score}점")
     print("="*30)
 
-def save_data(quizzes):
-    """퀴즈 리스트를 JSON 파일로 저장합니다."""
-    file_path = "quizzes.json"
-    # 객체 리스트를 딕셔너리 리스트로 변환
-    data = [
-        {"question": q.question, "choices": q.choices, "answer": q.answer}
-        for q in quizzes
-    ]
-    with open(file_path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
-
-def get_non_empty_input(prompt):
-    """비어 있지 않은 문자열을 입력받습니다."""
-    while True:
-        val = input(prompt).strip()
-        if val:
-            return val
-        print(">> [오류] 내용을 입력해 주세요.")
-
 def add_quiz(quizzes):
-    """새로운 퀴즈를 입력받아 리스트에 추가하고 저장합니다."""
     print("\n--- 새 퀴즈 추가 ---")
-    
     question = get_non_empty_input("문제 내용: ")
-    
-    choices = []
-    for i in range(1, 5):
-        choice = get_non_empty_input(f"선택지 {i}: ")
-        choices.append(choice)
-        
+    choices = [get_non_empty_input(f"선택지 {i}: ") for i in range(1, 5)]
     answer = get_safe_input("정답 번호 (1-4): ", 1, 4)
-    if answer is None:
-        print("\n[알림] 추가가 취소되었습니다.")
-        return
-
-    # 리스트에 추가 및 파일 저장
-    new_quiz = Quiz(question, choices, answer)
-    quizzes.append(new_quiz)
-    save_data(quizzes)
-    print("\n[성공] 새로운 퀴즈가 등록되었습니다! ✨")
+    
+    if answer:
+        quizzes.append(Quiz(question, choices, answer))
+        save_data(quizzes)
+        print("\n[성공] 새로운 퀴즈가 등록되었습니다!")
 
 def list_quizzes(quizzes):
-    """저장된 모든 퀴즈 목록을 번호와 함께 출력합니다."""
-    # 퀴즈가 없는 경우 처리
     if not quizzes:
-        print("\n[알림] 등록된 퀴즈가 없습니다. 먼저 퀴즈를 추가해 주세요.")
+        print("\n[알림] 등록된 퀴즈가 없습니다.")
         return
-
-    print(f"\n--- 등록된 퀴즈 목록 (총 {len(quizzes)}개) ---")
+    print(f"\n--- 퀴즈 목록 (총 {len(quizzes)}개) ---")
     for i, q in enumerate(quizzes, 1):
-        # 문제와 정답 번호를 간결하게 표시
         print(f"{i}. {q.question} (정답: {q.answer}번)")
-    print("-" * 35)
 
+def show_high_score():
+    high_score = load_high_score()
+    if high_score == 0:
+        print("\n[알림] 아직 도전 기록이 없습니다.")
+    else:
+        print(f"\n🏆 현재 최고 점수: {high_score}점")
+
+# --- 메인 루프 ---
 def main():
     quizzes = load_data()
-    
     while True:
         print("\n--- 한화이글스 퀴즈 프로그램 ---")
         print("1. 퀴즈 풀기")
         print("2. 퀴즈 추가")
-        print("3. 퀴즈 목록") # 새 메뉴 추가
-        print("4. 종료")
+        print("3. 퀴즈 목록")
+        print("4. 최고 점수 확인")
+        print("5. 종료")
         
         menu = input("메뉴 선택: ").strip()
         
@@ -161,9 +166,11 @@ def main():
         elif menu == '2':
             add_quiz(quizzes)
         elif menu == '3':
-            list_quizzes(quizzes) # 함수 호출
+            list_quizzes(quizzes)
         elif menu == '4':
-            print("프로그램을 종료합니다. 보살 팬 여러분 화이팅! 🦅")
+            show_high_score()
+        elif menu == '5':
+            print("프로그램을 종료합니다. 🦅")
             break
         else:
             print("잘못된 선택입니다.")
